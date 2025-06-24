@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+
+body{
+  overflow-x: hidden;
+}
+
+.your-div {
+  overflow: auto; /* or scroll */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+.your-div::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
