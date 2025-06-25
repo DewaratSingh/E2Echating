@@ -91,15 +91,32 @@ router.post("/signIn", async (req, res) => {
       path: "/",
       maxAge: 24 * 60 * 60 * 1000,
     });
-    let data = {
+
+    const userData = {
       name: user.name,
       contact: user.contact,
       email: user.email,
       image: user.image,
-      Id: user._id,
     };
 
-    res.json({ success: true, user: data });
+    let friends = [];
+
+    for (let i = 0; i < user.friends.length; i++) {
+      const friendsArr = user.friends[i];
+      const use = await User.findById(friendsArr.friendId);
+      if (use) {
+        friends.push({
+          name: use.name,
+          contact: use.contact,
+          email: use.email,
+          image: use.image,
+          friendId: use._id,
+          roomId: friendsArr.roomId,
+        });
+      }
+    }
+
+    res.json({ success: true, user:userData, contactList:friends });
   } catch (error) {
     console.error("SignIn Error:", error);
     res.status(500).json({ success: false, message: "Server error" });
@@ -129,7 +146,7 @@ router.get("/isvalidUser", async (req, res) => {
     }
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findByIdAndUpdate(decoded.id,{$set:{online:true}});
 
     const newtoken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1d",
@@ -143,33 +160,38 @@ router.get("/isvalidUser", async (req, res) => {
       maxAge: 24 * 60 * 60 * 1000,
     });
 
-let friends = [];
+    const userData = {
+      name: user.name,
+      contact: user.contact,
+      email: user.email,
+      image: user.image,
+      id:user._id,
+    };
 
-for (let i = 0; i < user.friends.length; i++) {
-  const friendId = user.friends[i];
-  const use = await User.findById(friendId);
+    let friends = [];
 
-  if (use) {
-    friends.push({
-      name: use.name,
-      contact: use.contact,
-      email: use.email,
-      image: use.image,
-      id: use._id,
+    for (let i = 0; i < user.friends.length; i++) {
+      const friendsArr = user.friends[i];
+      const use = await User.findById(friendsArr.friendId);
+      if (use) {
+        friends.push({
+          name: use.name,
+          contact: use.contact,
+          email: use.email,
+          image: use.image,
+          friendId: use._id,
+          roomId: friendsArr.roomId,
+          online:use.online,
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      user: userData,
+      contactList: friends,
+      token: newtoken,
     });
-  }
-}
-
-let data = {
-  name: user.name,
-  contact: user.contact,
-  email: user.email,
-  image: user.image,
-  id: user._id,
-  friends: friends,
-};
-
-    res.json({ success: true, user: data, token: newtoken });
   } catch (error) {
     console.error("isvalidUser Error:", error);
     return res.status(500).json({ success: false, message: "Internal error" });

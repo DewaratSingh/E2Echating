@@ -25,11 +25,17 @@ const userSchema = new mongoose.Schema(
       default:
         "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=400",
     },
-    socketId: {
-      type: String,
-      default: "",
+    online: {
+      type: Boolean,
+      default: false,
     },
-    friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    socketId:{type:String , default:""},
+    friends: [
+      {
+        friendId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        roomId: { type: mongoose.Schema.Types.ObjectId, ref: "Chat" },
+      },
+    ],
   },
   {
     timestamps: true,

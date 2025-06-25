@@ -1,6 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
+import Chat from "../models/chating.js";
 
 const router = express.Router();
 
@@ -22,8 +23,6 @@ router.post("/addtocontact", async (req, res) => {
       });
     }
 
-
-
     const is = await User.findOne({ contact: contact });
     if (!is) {
       return res.status(400).json({
@@ -32,42 +31,115 @@ router.post("/addtocontact", async (req, res) => {
       });
     }
 
+    const chat = new Chat({});
+    chat.save();
 
+    const user = await User.findByIdAndUpdate(
+      decoded.id,
+      {
+        $push: { friends: { friendId: is._id, roomId: chat._id } },
+      },
+      { new: true }
+    );
 
-    const user = await User.findByIdAndUpdate(decoded.id, {
-      $addToSet: { friends: is._id },
-    },{ new: true });
+    const friend = await User.findByIdAndUpdate(
+      is._id,
+      {
+        $push: { friends: { friendId: user._id, roomId: chat._id } },
+      },
+      { new: true }
+    );
 
-  let friends = [];
+    let friends = [];
 
-for (let i = 0; i < user.friends.length; i++) {
-  const friendId = user.friends[i];
-  const use = await User.findById(friendId);
-
-  if (use) {
-    friends.push({
-      name: use.name,
-      contact: use.contact,
-      email: use.email,
-      image: use.image,
-      Id: use._id,
-    });
-  }
-}
-
-let data = {
-  name: user.name,
-  contact: user.contact,
-  email: user.email,
-  image: user.image,
-  Id: user._id,
-  friends: friends,
-};
+    for (let i = 0; i < user.friends.length; i++) {
+      const friendsArr = user.friends[i];
+      const use = await User.findById(friendsArr.friendId);
+      if (use) {
+        friends.push({
+          name: use.name,
+          contact: use.contact,
+          email: use.email,
+          image: use.image,
+          friendId: use._id,
+          roomId: chat._id,
+          online: use.online,
+        });
+      }
+    }
 
     return res.status(200).json({
       success: true,
       message: "Contact added sucessful",
-      user:data,
+      contactList: friends,
+    });
+  } catch (error) {
+    console.error("Signup error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+router.post("/getMessage", async (req, res) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Token missing" });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const { roomId } = req.body;
+    const chat = await Chat.findById(roomId);
+
+    return res.status(200).json({
+      success: true,
+      mes: chat.chats,
+    });
+  } catch (error) {
+    console.error("Signup error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+router.get("/getContact", async (req, res) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Token missing" });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findById(decoded.id);
+
+    let friends = [];
+
+    for (let i = 0; i < user.friends.length; i++) {
+      const friendsArr = user.friends[i];
+      const use = await User.findById(friendsArr.friendId);
+      if (use) {
+        friends.push({
+          name: use.name,
+          contact: use.contact,
+          email: use.email,
+          image: use.image,
+          friendId: use._id,
+          roomId: friendsArr.roomId,
+          online: use.online,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Contact added sucessful",
+      contactList: friends,
     });
   } catch (error) {
     console.error("Signup error:", error);
