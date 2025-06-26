@@ -29,11 +29,12 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    socketId:{type:String , default:""},
+    socketId: { type: String, default: "" },
     friends: [
       {
         friendId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         roomId: { type: mongoose.Schema.Types.ObjectId, ref: "Chat" },
+        noifiy: { type: Number, default: 0 },
       },
     ],
   },

@@ -37,7 +37,7 @@ router.post("/addtocontact", async (req, res) => {
     const user = await User.findByIdAndUpdate(
       decoded.id,
       {
-        $push: { friends: { friendId: is._id, roomId: chat._id } },
+        $push: { friends: { friendId: is._id, roomId: chat._id, noifiy: 0 } },
       },
       { new: true }
     );
@@ -45,7 +45,7 @@ router.post("/addtocontact", async (req, res) => {
     const friend = await User.findByIdAndUpdate(
       is._id,
       {
-        $push: { friends: { friendId: user._id, roomId: chat._id } },
+        $push: { friends: { friendId: user._id, roomId: chat._id, noifiy: 0 } },
       },
       { new: true }
     );
@@ -64,6 +64,7 @@ router.post("/addtocontact", async (req, res) => {
           friendId: use._id,
           roomId: chat._id,
           online: use.online,
+          noifiy: friendsArr.noifiy,
         });
       }
     }
@@ -132,8 +133,10 @@ router.get("/getContact", async (req, res) => {
           friendId: use._id,
           roomId: friendsArr.roomId,
           online: use.online,
+          noifiy: friendsArr.noifiy,
         });
       }
+      console.log(friendsArr.noifiy);
     }
 
     return res.status(200).json({
@@ -148,6 +151,56 @@ router.get("/getContact", async (req, res) => {
       message: "Internal server error",
     });
   }
+});
+
+router.post("/setNotify", async (req, res) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Token missing" });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const { friendId, notify } = req.body;
+
+    const user = await User.findById(decoded.id);
+    let friendslist = [];
+
+    for (let i = 0; i < user.friends.length; i++) {
+      const friendsArr = user.friends[i];
+      if (friendsArr.friendId == friendId) {
+          user.friends[i].noifiy = 0;
+          await user.save();
+        
+      }
+      const use = await User.findById(friendsArr.friendId);
+      if (use) {
+        friendslist.push({
+          name: use.name,
+          contact: use.contact,
+          email: use.email,
+          image: use.image,
+          friendId: use._id,
+          roomId: friendsArr.roomId,
+          online: use.online,
+          noifiy: user.friends[i].noifiy ,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Contact added sucessful",
+      contactList: friendslist,
+    });
+  } catch (error) {
+    console.error("Signup error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+   }
 });
 
 export default router;

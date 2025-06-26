@@ -76,6 +76,18 @@ io.on("connection", async (socket) => {
   socket.on("sendMessage", async (data) => {
     const receiverSocketId = onlineUsers.get(data.id?.toString());
 
+    
+    const friend = await User.findById(data.id);
+
+    for (let i = 0; i < friend.friends.length; i++) {
+      const friendsArr = friend.friends[i];
+      if (friendsArr.friendId == data.from) {
+          friend.friends[i].noifiy += 1;
+          await friend.save();
+        break;
+      }
+    }
+
     await Chat.findByIdAndUpdate(data.roomId, {
       $push: {
         chats: {
@@ -86,6 +98,7 @@ io.on("connection", async (socket) => {
         },
       },
     });
+  const user=await User.findById(data.from);
 
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("receiveMessage", {
@@ -94,6 +107,7 @@ io.on("connection", async (socket) => {
         time: data.time,
         seen: 1,
         from: data.from,
+        name:user.name,
       });
     }
   });

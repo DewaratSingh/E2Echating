@@ -182,6 +182,7 @@ router.get("/isvalidUser", async (req, res) => {
           friendId: use._id,
           roomId: friendsArr.roomId,
           online:use.online,
+          noifiy: friendsArr.noifiy,
         });
       }
     }

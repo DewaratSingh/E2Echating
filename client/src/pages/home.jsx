@@ -85,10 +85,44 @@ function Home() {
     }
   };
 
+    const getContact = async () => {
+    try {
+      const response = await axios.get("http://localhost:4000/api/getContact", {
+        withCredentials: true,
+      });
+      if (response.data.success) {
+        setcontact(response.data.contactList);
+        console.log(response.data.contactList);
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "User not found");
+    }
+  };
+
+
+  const getNotify = async (id) => {
+    try {
+      const response = await axios.post(
+        "http://localhost:4000/api/setNotify",
+        { friendId: id },
+        {
+          withCredentials: true,
+        }
+      );
+      if (response.data.success) {
+        setcontact(response.data.contactList);
+        console.log(response.data.contactList);
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "User not found");
+    }
+  };
+
   const select = async (ele) => {
     setuser(ele);
     await getMessage(ele.roomId);
     setroomId(ele.roomId);
+    getNotify(ele.friendId);
   };
 
   const sendMessage = () => {
@@ -130,30 +164,28 @@ function Home() {
             from: data.from,
           },
         ]);
+      } else {
+        getContact()
+
+        toast(() => (
+          <div>
+            <div className="flex flex-col gap-1">
+              <div className="font-black">{data.name}</div>
+              <div>{data.message}</div>
+            </div>
+          </div>
+        ));
       }
     });
 
     return () => {
       socket.off("receiveMessage");
     };
-  }, []);
+  }, [roomId]);
 
-  const getContact = async () => {
-    try {
-      const response = await axios.get("http://localhost:4000/api/getContact", {
-        withCredentials: true,
-      });
-      if (response.data.success) {
-        setcontact(response.data.contactList);
-        console.log("aaya data :", response.data.contactList);
-      }
-    } catch (error) {
-      toast.error(error?.response?.data?.message || "User not found");
-    }
-  };
+
   useEffect(() => {
     const handleOnlineDost = async (data) => {
-      console.log(data.text);
       await getContact();
     };
 
@@ -172,6 +204,7 @@ function Home() {
   return (
     <div>
       <ToastContainer />
+
       {!connected ? (
         "Connecting...!"
       ) : (
@@ -189,7 +222,6 @@ function Home() {
                   <div className="text-xs text-gray-600 ">{data?.contact}</div>
                 </div>
               </div>
-              
             </div>
             <div className="overflow-y-scroll your-div hidden sm:inline-block">
               <div className="text-center mx-2">
@@ -219,6 +251,13 @@ function Home() {
                     className="bg-green-300 p-2 m-2 rounded"
                   >
                     <div className="flex  gap-1 items-center">
+                      <div
+                        className={`bg-red-500 h-[15px] w-[15px] flex item-center justify-center relative -top-[25px] -left-[10px] text-xs rounded-full text-white ${
+                          ele?.noifiy == 0 ? "hidden" : ""
+                        }`}
+                      >
+                        {ele?.noifiy}
+                      </div>
                       <img
                         src={ele.image}
                         className="h-[30px] w-[30px] rounded-full"
