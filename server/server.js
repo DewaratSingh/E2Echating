@@ -76,14 +76,13 @@ io.on("connection", async (socket) => {
   socket.on("sendMessage", async (data) => {
     const receiverSocketId = onlineUsers.get(data.id?.toString());
 
-    
     const friend = await User.findById(data.id);
 
     for (let i = 0; i < friend.friends.length; i++) {
       const friendsArr = friend.friends[i];
       if (friendsArr.friendId == data.from) {
-          friend.friends[i].noifiy += 1;
-          await friend.save();
+        friend.friends[i].noifiy += 1;
+        await friend.save();
         break;
       }
     }
@@ -98,19 +97,86 @@ io.on("connection", async (socket) => {
         },
       },
     });
-  const user=await User.findById(data.from);
 
     if (receiverSocketId) {
+      const user = await User.findById(data.from);
+
       io.to(receiverSocketId).emit("receiveMessage", {
-        roomId:data.roomId,
+        roomId: data.roomId,
         message: data.message,
         time: data.time,
         seen: 1,
         from: data.from,
-        name:user.name,
+        name: user.name,
       });
     }
   });
+
+  //----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+  socket.on("requestCall", async (data) => {
+    const receiverSocketId = onlineUsers.get(data.id?.toString());
+    await Chat.findByIdAndUpdate(data.roomId, {
+      $push: {
+        chats: {
+          message: "??Call??Request??",
+          time: data.time,
+          seen: 1,
+          from: data.from,
+        },
+      },
+    });
+
+    if (receiverSocketId) {
+      const user = await User.findById(data.from);
+      io.to(receiverSocketId).emit("receiveRequestCall", {
+        from: data.from,
+        name: user.name,
+      });
+    }
+  });
+
+  socket.on("endCall", async (data) => {
+    const receiverSocketId = onlineUsers.get(data.id?.toString());
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("callEnded", {
+        from: data.from,
+      });
+    }
+  });
+
+  //---------------------------------------------------------------------------------------------------------------------------------------------------------------
+  socket.on("offer", ({ offer, to, from }) => {
+    const receiverSocketId = onlineUsers.get(to?.toString());
+    console.log("offer", offer, to, from);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("receive-offer", { offer, from });
+    }
+  });
+
+  socket.on("answer", ({ answer, to }) => {
+    const receiverSocketId = onlineUsers.get(to?.toString());
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("receive-answer", { answer });
+    }
+  });
+
+  socket.on("ice-candidate", ({ candidate, to }) => {
+    const receiverSocketId = onlineUsers.get(to?.toString());
+    console.log("ICE candidate", candidate, to);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("ice-candidate", { candidate });
+    }
+  });
+
+  socket.on("end-call", ({ to }) => {
+    const receiverSocketId = onlineUsers.get(to?.toString());
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("call-ended");
+    }
+  });
+
+  //----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
   socket.on("disconnect", async () => {
     onlineUsers.delete(userId);
