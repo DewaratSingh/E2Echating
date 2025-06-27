@@ -114,36 +114,40 @@ io.on("connection", async (socket) => {
 
   //----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-
-
   //---------------------------------------------------------------------------------------------------------------------------------------------------------------
-  socket.on("offer", async ({ offer, to, from ,roomId,time,name}) => {
-    const receiverSocketId = onlineUsers.get(to?.toString());
-    await Chat.findByIdAndUpdate(roomId, {
-      $push: {
-        chats: {
-          message: "??Call??Request??",
+  socket.on(
+    "offer",
+    async ({ offer, to, from, roomId, time, name, audioOrVideo }) => {
+      const receiverSocketId = onlineUsers.get(to?.toString());
+      await Chat.findByIdAndUpdate(roomId, {
+        $push: {
+          chats: {
+            message: audioOrVideo
+              ? "??Call??Request./vedio??"
+              : "??Call??Request./audio??",
+            time: time,
+            seen: 1,
+            from: from,
+          },
+        },
+      });
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("receive-offer", { offer, from, name,audioOrVideo });
+        const user = await User.findById(from);
+
+        io.to(receiverSocketId).emit("receiveMessage", {
+          roomId: roomId,
+          message: audioOrVideo
+            ? "??Call??Request./vedio??"
+            : "??Call??Request./audio??",
           time: time,
           seen: 1,
           from: from,
-        },
-      },
-    });
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("receive-offer", { offer, from ,name});
-       const user = await User.findById(from);
-
-      io.to(receiverSocketId).emit("receiveMessage", {
-        roomId: roomId,
-        message: "??Call??Request??",
-        time: time,
-        seen: 1,
-        from: from,
-        name: user.name,
-      });
+          name: user.name,
+        });
+      }
     }
-  });
+  );
 
   socket.on("answer", ({ answer, to }) => {
     const receiverSocketId = onlineUsers.get(to?.toString());

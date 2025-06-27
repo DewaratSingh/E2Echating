@@ -25,9 +25,6 @@ function Home() {
   const router = useNavigate();
 
   //---------------------------------------------------------------------------------------------------------------------------------------------------------------
-  const [goingCall, setgoingCall] = useState(null);
-  const [incomeCall, setincomeCall] = useState(null);
-  //---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
   const [VidCallStart, setVidCallStart] = useState(false);
   const localVideoRef = useRef(null);
@@ -36,6 +33,8 @@ function Home() {
   const localStream = useRef(null);
   const peerConnection = useRef(null);
   const [temporaryuser, settemporaryuser] = useState("");
+  const audioOrVideoclient = useRef(true);
+
   //---------------------------------------------------------------------------------------------------------------------------------------------------------------
   const handleSubmit = async () => {
     try {
@@ -184,7 +183,10 @@ function Home() {
       } else {
         getContact();
 
-        if (data.message == "??Call??Request??") {
+        if (
+          data.message == "??Call??Request./vedio??" ||
+          data.message == "??Call??Request./audio??"
+        ) {
           return;
         }
         toast(() => (
@@ -227,10 +229,13 @@ function Home() {
 
   const setupMediaAndConnection = async (remoteId = "") => {
     localStream.current = await navigator.mediaDevices.getUserMedia({
-      video: true,
+      video: audioOrVideoclient.current,
       audio: true,
     });
-    localVideoRef.current.srcObject = localStream.current;
+
+    if (audioOrVideoclient.current && localVideoRef.current) {
+      localVideoRef.current.srcObject = localStream.current;
+    }
 
     peerConnection.current = new RTCPeerConnection(iceServers);
 
@@ -239,14 +244,15 @@ function Home() {
     });
 
     peerConnection.current.ontrack = (event) => {
-      remoteVideoRef.current.srcObject = event.streams[0];
+      if (remoteVideoRef.current && audioOrVideoclient.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      }
     };
 
     peerConnection.current.onicecandidate = (event) => {
       if (event.candidate) {
-        console.log("remoteId", remoteId, incomingVideoCall.from);
         socket.emit("ice-candidate", {
-          to: incomingVideoCall.from,
+          to: incomingVideoCall?.from ?? remoteId,
           candidate: event.candidate,
         });
       }
@@ -255,8 +261,10 @@ function Home() {
     return peerConnection.current;
   };
 
-  const placeVideoCall = async () => {
+  const placeCall = async (callType) => {
+    audioOrVideoclient.current = callType === "video";
     setVidCallStart(true);
+
     const pc = await setupMediaAndConnection(user.friendId);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -268,13 +276,38 @@ function Home() {
       roomId: user.roomId,
       time: readableDateTime(),
       name: data.name,
+      audioOrVideo: audioOrVideoclient.current,
       offer,
     });
   };
 
+  const cleanUpMedia = () => {
+    if (peerConnection.current) {
+      peerConnection.current.close();
+      peerConnection.current = null;
+    }
+
+    if (localStream.current) {
+      localStream.current.getTracks().forEach((track) => track.stop());
+      localStream.current = null;
+    }
+
+    if (localVideoRef.current?.srcObject) {
+      localVideoRef.current.srcObject = null;
+    }
+
+    if (remoteVideoRef.current?.srcObject) {
+      remoteVideoRef.current.srcObject = null;
+    }
+
+    setVidCallStart(false);
+    setIncomingVideoCall(null);
+  };
+
   useEffect(() => {
-    socket.on("receive-offer", async ({ offer, from, name }) => {
-      setIncomingVideoCall({ offer, from, name });
+    socket.on("receive-offer", async ({ offer, from, name, audioOrVideo }) => {
+      setIncomingVideoCall({ offer, from, name, audioOrVideo });
+      audioOrVideoclient.current = audioOrVideo;
     });
 
     socket.on("receive-answer", async ({ answer }) => {
@@ -292,34 +325,17 @@ function Home() {
     });
 
     socket.on("call-ended", () => {
-      if (peerConnection.current) {
-        peerConnection.current.close();
-        peerConnection.current = null;
-      }
-
-      if (localVideoRef.current && localVideoRef.current.srcObject) {
-        localVideoRef.current.srcObject
-          .getTracks()
-          .forEach((track) => track.stop());
-        localVideoRef.current.srcObject = null;
-      }
-
-      if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
-        remoteVideoRef.current.srcObject
-          .getTracks()
-          .forEach((track) => track.stop());
-        remoteVideoRef.current.srcObject = null;
-      }
-
-      setVidCallStart(false);
-      setIncomingVideoCall(null);
+      cleanUpMedia();
     });
   }, []);
 
   const acceptVideoCall = async () => {
-    console.log("Accepting video call from:", incomingVideoCall.from);
+    console.log("Accepting call from:", incomingVideoCall.from);
     setVidCallStart(true);
-    const pc = await setupMediaAndConnection(false, incomingVideoCall.from);
+
+    audioOrVideoclient.current = incomingVideoCall.audioOrVideo;
+
+    const pc = await setupMediaAndConnection(incomingVideoCall.from);
     await pc.setRemoteDescription(
       new RTCSessionDescription(incomingVideoCall.offer)
     );
@@ -337,53 +353,13 @@ function Home() {
   const endCall = () => {
     socket.emit("end-call", { to: temporaryuser });
 
-    if (peerConnection.current) {
-      peerConnection.current.close();
-      peerConnection.current = null;
-    }
-
-    if (localVideoRef.current && localVideoRef.current.srcObject) {
-      localVideoRef.current.srcObject
-        .getTracks()
-        .forEach((track) => track.stop());
-      localVideoRef.current.srcObject = null;
-    }
-
-    if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
-      remoteVideoRef.current.srcObject
-        .getTracks()
-        .forEach((track) => track.stop());
-      remoteVideoRef.current.srcObject = null;
-    }
-
-    setVidCallStart(false);
-    setIncomingVideoCall(null);
+    cleanUpMedia();
   };
 
   const endCallBeforeAccepting = () => {
     socket.emit("end-call", { to: incomingVideoCall.from });
 
-    if (peerConnection.current) {
-      peerConnection.current.close();
-      peerConnection.current = null;
-    }
-
-    if (localVideoRef.current && localVideoRef.current.srcObject) {
-      localVideoRef.current.srcObject
-        .getTracks()
-        .forEach((track) => track.stop());
-      localVideoRef.current.srcObject = null;
-    }
-
-    if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
-      remoteVideoRef.current.srcObject
-        .getTracks()
-        .forEach((track) => track.stop());
-      remoteVideoRef.current.srcObject = null;
-    }
-
-    setVidCallStart(false);
-    setIncomingVideoCall(null);
+    cleanUpMedia();
   };
 
   //---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -490,18 +466,17 @@ function Home() {
                     </div>
                   </div>
                   <div className="mx-3.5 flex gap-8 text-2xl">
-                    {/* <div
+                    <div
                       onClick={() => {
-                        alert(1);
-                        placeAcall();
+                        placeCall("audio");
                       }}
                     >
                       <IoIosCall />
-                    </div> */}
+                    </div>
                     <div>
                       <IoIosVideocam
                         onClick={() => {
-                          placeVideoCall();
+                          placeCall("video");
                         }}
                       />
                     </div>
@@ -521,7 +496,8 @@ function Home() {
                       }`}
                     >
                       <div>
-                        {msg.message == "??Call??Request??" ? (
+                        {
+                        msg.message == "??Call??Request./audio??" ? (
                           <div
                             onClick={() => {
                               placeAcall();
@@ -529,10 +505,22 @@ function Home() {
                             className="flex gap-1.5 items-center"
                           >
                             <IoIosCall />
-                            <div>Video Call</div>
+                            <div>Audio Call</div>
+                          </div>
+                        ) : (
+                          msg.message == "??Call??Request./vedio??" ? (
+                          <div
+                            onClick={() => {
+                              placeAcall();
+                            }}
+                            className="flex gap-1.5 items-center"
+                          >
+                            <IoIosVideocam />
+                            <div>Vedio Call</div>
                           </div>
                         ) : (
                           msg.message
+                        )
                         )}
                       </div>
                       <div className="flex justify-between items-center text-xs text-[#807878]">
@@ -579,45 +567,10 @@ function Home() {
       )}
 
       <div className="fixed top-3 left-[50%] z-50 transform-translate-x-[-50%] p-4">
-        {/* {incomeCall && (
-          <div className="bg-black min-w-[300px] p-4 rounded-lg shadow-md">
-            <h2 className="text-lg font-semibold">Incoming Call</h2>
-            <p className="text-gray-600">From:{incomeCall.name}</p>
-            <div className="flex justify-evenly items-center mt-4">
-              <button
-                className="bg-green-500 text-white px-4 py-2 rounded-lg mr-2"
-                onClick={() => {
-                  handleAccept();
-                }}
-              >
-                Accept
-              </button>
-              <button
-                className="bg-red-500 text-white px-4 py-2 rounded-lg"
-                onClick={() => rejectCall(incomeCall.from)}
-              >
-                Reject
-              </button>
-            </div>
-          </div>
-        )}
-        {goingCall && (
-          <div className="bg-black min-w-[300px] p-4 rounded-lg shadow-md">
-            <h2 className="text-lg font-semibold">Calling..</h2>
-            <p className="text-gray-600">To:{goingCall.name}</p>
-            <div className="flex justify-evenly items-center mt-4">
-              <button
-                className="bg-red-500 text-white px-4 py-2 rounded-lg"
-                onClick={() => rejectCall(goingCall.from)}
-              >
-                Reject
-              </button>
-            </div>
-          </div>
-        )} */}
+  
         {incomingVideoCall && (
           <div className="bg-white min-w-[300px] p-4 rounded-lg shadow-md">
-            <h2 className="text-lg font-semibold">Incoming Video Call</h2>
+            <h2 className="text-lg font-semibold">{ audioOrVideoclient.current?"Incoming Video Call":"Incoming Audio Call"}</h2>
             <p className="text-gray-600">From:{incomingVideoCall.name}</p>
             <div className="flex justify-evenly items-center mt-4">
               <button
@@ -639,8 +592,8 @@ function Home() {
         )}
       </div>
 
-      {VidCallStart && (
-        <div className="fixed top-0  left-0 w-full h-full bg-black flex items-center justify-center z-50">
+      {VidCallStart && (audioOrVideoclient.current ? (
+        <div className="fixed top-0  left-0 w-full h-full bg-white flex items-center justify-center z-50">
           <video
             ref={remoteVideoRef}
             className="fixed top-0 z-10 left-0 bg-gray-800"
@@ -668,7 +621,22 @@ function Home() {
             </button>
           </div>
         </div>
-      )}
+      ) : (
+        <div className="fixed top-0  left-0 w-full h-full bg-white flex items-center justify-center z-50">
+          <div className="h-[200px] w-[200px] rounded-full bg-green-100 flex items-center justify-center font-extrabold  ">Audio Call</div>
+         
+          <div className="flex justify-center absolute bottom-5 items-center z-30">
+            <button
+              className="bg-red-500 text-white z-30 px-4 py-2 rounded-lg"
+              onClick={() => {
+                endCall();
+              }}
+            >
+              End Call
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
