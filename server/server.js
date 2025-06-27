@@ -114,43 +114,34 @@ io.on("connection", async (socket) => {
 
   //----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-  socket.on("requestCall", async (data) => {
-    const receiverSocketId = onlineUsers.get(data.id?.toString());
-    await Chat.findByIdAndUpdate(data.roomId, {
+
+
+
+  //---------------------------------------------------------------------------------------------------------------------------------------------------------------
+  socket.on("offer", async ({ offer, to, from ,roomId,time,name}) => {
+    const receiverSocketId = onlineUsers.get(to?.toString());
+    await Chat.findByIdAndUpdate(roomId, {
       $push: {
         chats: {
           message: "??Call??Request??",
-          time: data.time,
+          time: time,
           seen: 1,
-          from: data.from,
+          from: from,
         },
       },
     });
-
     if (receiverSocketId) {
-      const user = await User.findById(data.from);
-      io.to(receiverSocketId).emit("receiveRequestCall", {
-        from: data.from,
+      io.to(receiverSocketId).emit("receive-offer", { offer, from ,name});
+       const user = await User.findById(from);
+
+      io.to(receiverSocketId).emit("receiveMessage", {
+        roomId: roomId,
+        message: "??Call??Request??",
+        time: time,
+        seen: 1,
+        from: from,
         name: user.name,
       });
-    }
-  });
-
-  socket.on("endCall", async (data) => {
-    const receiverSocketId = onlineUsers.get(data.id?.toString());
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("callEnded", {
-        from: data.from,
-      });
-    }
-  });
-
-  //---------------------------------------------------------------------------------------------------------------------------------------------------------------
-  socket.on("offer", ({ offer, to, from }) => {
-    const receiverSocketId = onlineUsers.get(to?.toString());
-    console.log("offer", offer, to, from);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("receive-offer", { offer, from });
     }
   });
 

@@ -164,7 +164,7 @@ function Home() {
     });
     setmes((prev) => [
       ...prev,
-      { message: message, time: readableDateTime, seen: 1, from: data.id },
+      { message: message, time: readableDateTime(), seen: 1, from: data.id },
     ]);
     setMessage("");
   };
@@ -184,6 +184,9 @@ function Home() {
       } else {
         getContact();
 
+        if (data.message == "??Call??Request??") {
+          return;
+        }
         toast(() => (
           <div>
             <div className="flex flex-col gap-1">
@@ -216,47 +219,6 @@ function Home() {
     const mesDiv = document.getElementById("mes");
     mesDiv?.scrollTo({ top: mesDiv.scrollHeight, behavior: "smooth" });
   }, [mes]);
-
-  const placeAcall = async () => {
-    socket.emit("requestCall", {
-      id: user.friendId,
-      time: readableDateTime(),
-      from: data.id,
-      roomId: roomId,
-    });
-
-    setgoingCall({ name: user.name, from: user.friendId });
-  };
-
-  const rejectCall = (from) => {
-    socket.emit("endCall", {
-      id: from,
-      from: data.id,
-    });
-    setgoingCall(null);
-    setincomeCall(null);
-  };
-
-  useEffect(() => {
-    socket.on("receiveRequestCall", (data) => {
-      setincomeCall(data);
-    });
-
-    return () => {
-      socket.off("receiveRequestCall");
-    };
-  }, []);
-
-  useEffect(() => {
-    socket.on("callEnded", (data) => {
-      setincomeCall(null);
-      setgoingCall(null);
-    });
-
-    return () => {
-      socket.off("callEnded");
-    };
-  }, []);
 
   //---------------------------------------------------------------------------------------------------------------------------------------------------------------
   const iceServers = {
@@ -303,13 +265,16 @@ function Home() {
     socket.emit("offer", {
       to: user.friendId,
       from: data.id,
+      roomId: user.roomId,
+      time: readableDateTime(),
+      name: data.name,
       offer,
     });
   };
 
   useEffect(() => {
-    socket.on("receive-offer", async ({ offer, from }) => {
-      setIncomingVideoCall({ offer, from });
+    socket.on("receive-offer", async ({ offer, from, name }) => {
+      setIncomingVideoCall({ offer, from, name });
     });
 
     socket.on("receive-answer", async ({ answer }) => {
@@ -362,6 +327,7 @@ function Home() {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     settemporaryuser(incomingVideoCall.from);
+
     socket.emit("answer", {
       to: incomingVideoCall.from,
       answer,
@@ -370,6 +336,32 @@ function Home() {
 
   const endCall = () => {
     socket.emit("end-call", { to: temporaryuser });
+
+    if (peerConnection.current) {
+      peerConnection.current.close();
+      peerConnection.current = null;
+    }
+
+    if (localVideoRef.current && localVideoRef.current.srcObject) {
+      localVideoRef.current.srcObject
+        .getTracks()
+        .forEach((track) => track.stop());
+      localVideoRef.current.srcObject = null;
+    }
+
+    if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
+      remoteVideoRef.current.srcObject
+        .getTracks()
+        .forEach((track) => track.stop());
+      remoteVideoRef.current.srcObject = null;
+    }
+
+    setVidCallStart(false);
+    setIncomingVideoCall(null);
+  };
+
+  const endCallBeforeAccepting = () => {
+    socket.emit("end-call", { to: incomingVideoCall.from });
 
     if (peerConnection.current) {
       peerConnection.current.close();
@@ -403,7 +395,7 @@ function Home() {
       {!connected ? (
         "Connecting...!"
       ) : (
-        <div className="sm:flex inline-block bg-black">
+        <div className="sm:flex inline-block bg-white">
           <div className="flex  gap-1.5 w-[100vw] sm:w-[25vw] relative  sm:flex-col  sm:h-screen bg-[#ACB2AC] ">
             <div className="  flex items-center justify-between  sm:flex-col sm:w-[25vw] w-[100vw] ">
               <div className="flex p-2 gap-2">
@@ -498,14 +490,14 @@ function Home() {
                     </div>
                   </div>
                   <div className="mx-3.5 flex gap-8 text-2xl">
-                    <div
+                    {/* <div
                       onClick={() => {
                         alert(1);
                         placeAcall();
                       }}
                     >
                       <IoIosCall />
-                    </div>
+                    </div> */}
                     <div>
                       <IoIosVideocam
                         onClick={() => {
@@ -537,7 +529,7 @@ function Home() {
                             className="flex gap-1.5 items-center"
                           >
                             <IoIosCall />
-                            <div>Voice Call</div>
+                            <div>Video Call</div>
                           </div>
                         ) : (
                           msg.message
@@ -587,7 +579,7 @@ function Home() {
       )}
 
       <div className="fixed top-3 left-[50%] z-50 transform-translate-x-[-50%] p-4">
-        {incomeCall && (
+        {/* {incomeCall && (
           <div className="bg-black min-w-[300px] p-4 rounded-lg shadow-md">
             <h2 className="text-lg font-semibold">Incoming Call</h2>
             <p className="text-gray-600">From:{incomeCall.name}</p>
@@ -622,9 +614,9 @@ function Home() {
               </button>
             </div>
           </div>
-        )}
+        )} */}
         {incomingVideoCall && (
-          <div className="bg-black min-w-[300px] p-4 rounded-lg shadow-md">
+          <div className="bg-white min-w-[300px] p-4 rounded-lg shadow-md">
             <h2 className="text-lg font-semibold">Incoming Video Call</h2>
             <p className="text-gray-600">From:{incomingVideoCall.name}</p>
             <div className="flex justify-evenly items-center mt-4">
@@ -638,7 +630,7 @@ function Home() {
               </button>
               <button
                 className="bg-red-500 text-white px-4 py-2 rounded-lg"
-                onClick={() => rejectVideoCall(incomeCall.from)}
+                onClick={() => endCallBeforeAccepting()}
               >
                 Reject
               </button>
@@ -672,7 +664,7 @@ function Home() {
                 endCall();
               }}
             >
-              Reject
+              End Call
             </button>
           </div>
         </div>
